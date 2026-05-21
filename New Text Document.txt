@@ -1,0 +1,597 @@
+# KRecon — Full Codebase Context Document
+
+> **Purpose**: This document describes the entire krecon codebase in enough detail that an LLM can answer questions, generate code, debug issues, and extend features without needing the raw source files.
+
+---
+
+## 1. Project Overview
+
+**KRecon** is a **Creator-Brand Marketplace** platform built with **Python / FastAPI**. It connects content *Creators* (influencers) with *Brands* (companies), allowing brands to list products and use an **AI-powered matching engine** (sentence-transformers) to find the best creators for their campaigns.
+
+### Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Framework** | FastAPI |
+| **ORM** | SQLAlchemy (declarative base) |
+| **Database** | SQLite (`krecon.db`) |
+| **Auth** | JWT (python-jose) + bcrypt password hashing (passlib) |
+| **AI Matching** | `sentence-transformers` (model: `all-MiniLM-L6-v2`) + numpy cosine similarity |
+| **Environment** | python-dotenv for `.env` loading |
+
+### Key Dependencies (from requirements.txt)
+
+- `fastapi`, `uvicorn` — web framework & ASGI server
+- `sqlalchemy` — ORM
+- `python-jose[cryptography]` — JWT encoding/decoding
+- `passlib[bcrypt]` — password hashing
+- `sentence-transformers` — semantic text embeddings for AI matching
+- `numpy` — vector operations
+- `python-dotenv` — env var loading
+
+---
+
+## 2. Directory Structure
+
+```
+krecon/
+├── .env                        # Environment variables (DB URL, JWT config)
+├── .gitignore
+├── requirements.txt            # Python dependencies
+├── krecon.db                   # SQLite database file
+├── backend/
+│   ├── __init__.py             # Empty (package marker)
+│   ├── main.py                 # FastAPI app entrypoint, router registration
+│   ├── database.py             # SQLAlchemy engine, session, Base setup
+│   ├── login.py                # Empty file (unused)
+│   ├── ai/
+│   │   └── matcher.py          # AI creator matching logic (sentence-transformers)
+│   ├── models/
+│   │   ├── __init__.py         # Empty (package marker)
+│   │   ├── user.py             # User SQLAlchemy model
+│   │   ├── creator.py          # Creator SQLAlchemy model
+│   │   ├── brand.py            # Brand SQLAlchemy model
+│   │   └── product.py          # Product SQLAlchemy model
+│   ├── routes/
+│   │   ├── auth.py             # Authentication routes (register, login, JWT)
+│   │   ├── ai.py               # AI matching endpoint
+│   │   ├── brands.py           # Brand profile CRUD routes
+│   │   ├── creator.py          # Creator profile CRUD + search routes
+│   │   └── marketplace.py      # Product listing routes
+│   ├── schemas/                # Empty (Pydantic schemas not yet implemented)
+│   ├── brand/                  # Empty (placeholder)
+│   ├── core/                   # Empty (placeholder)
+│   └── creator/                # Empty (placeholder)
+└── frontend/                   # Empty (not yet built)
+```
+
+---
+
+## 3. Configuration
+
+### Environment Variables (`.env`)
+
+```
+DATABASE_URL=sqlite:///./krecon.db
+JWT_SECRET=supersecretkey
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+```
+
+> **Note**: The `.env` file is loaded via `python-dotenv`, but currently `auth.py` hardcodes the JWT values directly instead of reading from environment.
+
+---
+
+## 4. Database Setup — `backend/database.py`
+
+Sets up the SQLAlchemy engine, session factory, and declarative base.
+
+- **Engine**: `create_engine("sqlite:///./krecon.db", connect_args={"check_same_thread": False})`
+  - `check_same_thread=False` is required for SQLite with FastAPI's async workers.
+- **SessionLocal**: `sessionmaker(autocommit=False, autoflush=False, bind=engine)`
+- **Base**: `declarative_base()` — all models inherit from this.
+
+Every route file defines its own `get_db()` dependency that yields a `SessionLocal()` session.
+
+---
+
+## 5. Database Models
+
+### 5.1 `User` — `backend/models/user.py`
+
+Table name: `users`
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | Integer | Primary Key, Indexed | Auto-increment user ID |
+| `name` | String | — | User's display name |
+| `email` | String | Unique, Indexed | Login email |
+| `password` | String | — | bcrypt-hashed password |
+| `role` | String | — | Either `"creator"` or `"brand"` |
+
+**Relationships** (defined via backref on child models):
+- `user.creator_profile` → the user's Creator record (if role=creator)
+- `user.brand_profile` → the user's Brand record (if role=brand)
+
+---
+
+### 5.2 `Creator` — `backend/models/creator.py`
+
+Table name: `creators`
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | Integer | Primary Key, Indexed | Auto-increment creator ID |
+| `user_id` | Integer | ForeignKey(`users.id`), Unique | Links to User |
+| `bio` | String | — | Creator's biography |
+| `niche` | String | — | Creator's content niche (e.g. "tech", "fitness") |
+| `followers` | Integer | — | Follower count |
+
+**Relationships**:
+- `creator.user` → related `User` object (via `relationship("User", backref="creator_profile")`)
+
+---
+
+### 5.3 `Brand` — `backend/models/brand.py`
+
+Table name: `brands`
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | Integer | Primary Key, Indexed | Auto-increment brand ID |
+| `user_id` | Integer | ForeignKey(`users.id`), Unique | Links to User |
+| `company_name` | String | — | Company name |
+| `industry` | String | — | Industry category |
+| `website` | String | — | Company website URL |
+
+**Relationships**:
+- `brand.user` → related `User` (via `relationship("User", backref="brand_profile")`)
+- `brand.products` → list of `Product` records (backref from Product model)
+
+---
+
+### 5.4 `Product` — `backend/models/product.py`
+
+Table name: `products`
+
+| Column | Type | Constraints | Description |
+|---|---|---|---|
+| `id` | Integer | Primary Key, Indexed | Auto-increment product ID |
+| `brand_id` | Integer | ForeignKey(`brands.id`) | Links to Brand |
+| `name` | String | — | Product name |
+| `description` | String | — | Product description |
+| `discounted_price` | Integer | — | Discounted price (integer, presumably in smallest currency unit) |
+
+**Relationships**:
+- `product.brand` → related `Brand` (via `relationship("Brand", backref="products")`)
+
+---
+
+### Entity Relationship Diagram
+
+```
+┌──────────┐       1:1       ┌───────────┐
+│  User    │◄───────────────►│  Creator  │
+│          │                 │           │
+│ id (PK)  │                 │ id (PK)   │
+│ name     │       1:1       │ user_id(FK│→users.id)
+│ email    │◄───────────────►│ bio       │
+│ password │                 │ niche     │
+│ role     │                 │ followers │
+│          │   ┌───────────┐ └───────────┘
+│          │◄─►│  Brand    │
+└──────────┘   │           │
+               │ id (PK)   │       1:N       ┌───────────────┐
+               │ user_id(FK│→users.id)       │  Product      │
+               │ company_  │◄───────────────►│               │
+               │   name    │                 │ id (PK)       │
+               │ industry  │                 │ brand_id(FK)  │
+               │ website   │                 │ name          │
+               └───────────┘                 │ description   │
+                                             │ discounted_   │
+                                             │   price       │
+                                             └───────────────┘
+```
+
+- A **User** with `role="creator"` has exactly one **Creator** profile.
+- A **User** with `role="brand"` has exactly one **Brand** profile.
+- A **Brand** can have many **Products**.
+
+---
+
+## 6. Application Entrypoint — `backend/main.py`
+
+```python
+app = FastAPI()
+Base.metadata.create_all(bind=engine)  # Auto-create all tables on startup
+
+# Router registration:
+app.include_router(creator_router)      # /creator/*
+app.include_router(auth_router)         # /auth/*
+app.include_router(brand_router)        # /brand/*  (⚠️ BUG: imports creator router instead of brands router)
+app.include_router(marketplace_router)  # /marketplace/*
+app.include_router(ai_router)           # /ai/*
+```
+
+**Root endpoint**: `GET /` → `{"message": "hello Prasad"}`
+
+### ⚠️ Known Bug in `main.py`
+Line 7 imports `creator.router` as `brand_router` instead of importing from `brands.py`:
+```python
+from backend.routes.creator import router as brand_router  # BUG: should be from backend.routes.brands
+```
+This means the brand routes from `brands.py` are **never registered**, and the creator router is registered twice.
+
+---
+
+## 7. Authentication System — `backend/routes/auth.py`
+
+### Configuration (hardcoded)
+- `JWT_SECRET = "supersecretkey"`
+- `JWT_ALGORITHM = "HS256"`
+- `ACCESS_TOKEN_EXPIRE_MINUTES = 30`
+- OAuth2 scheme: `OAuth2PasswordBearer(tokenUrl="/auth/login")`
+- Password hashing: `CryptContext(schemes=["bcrypt"], deprecated="auto")`
+
+### Endpoints
+
+#### `POST /auth/register`
+Registers a new user.
+
+**Query Parameters**: `name`, `email`, `password`, `role`
+
+**Logic**:
+1. Check if email already exists → 400 error if yes
+2. Hash password with bcrypt
+3. Create `User` record with given `role` (should be `"creator"` or `"brand"`)
+4. Return `{"message": "User registered successfully"}`
+
+#### `POST /auth/login`
+Authenticates a user and returns a JWT.
+
+**Query Parameters**: `email`, `password`
+
+**Logic**:
+1. Find user by email
+2. Verify password with bcrypt → 400 error if invalid
+3. Generate JWT with `sub` = user ID, `exp` = now + 30 minutes
+4. Return `{"access_token": "<jwt_token>"}`
+
+#### `GET /auth/me`
+Returns the current authenticated user's info.
+
+**Headers**: `Authorization: Bearer <token>`
+
+**Response**: `{"id": ..., "email": ..., "role": ...}`
+
+### Helper Functions
+
+- **`create_access_token(data: dict)`**: Creates a JWT with expiration.
+- **`get_current_user(token, db)`**: Dependency that decodes JWT, extracts user ID from `sub` claim, looks up user in DB. Used by all protected endpoints.
+- **`get_db()`**: Database session dependency.
+
+### ⚠️ Known Bug
+Line 24: `db.close` should be `db.close()` (missing parentheses — session never actually closes).
+
+---
+
+## 8. Creator Routes — `backend/routes/creator.py`
+
+Prefix: `/creator` | Tags: `["creator"]`
+
+All endpoints require authentication (`get_current_user` dependency).
+
+### Endpoints
+
+#### `POST /creator/profile`
+Creates a creator profile for the authenticated user.
+
+**Query Parameters**: `bio`, `niche`, `followrs` (note: typo in parameter name)
+
+**Logic**:
+1. Verify `current_user.role == "creator"` → 403 if not
+2. Check if profile already exists → 400 if yes
+3. Create `Creator` record
+4. Return `{"message": "Creator Profile created Sucessfully"}`
+
+**⚠️ Known Bug**: Parameter is named `followrs` (typo), but the Creator model column is `followers`. This will cause a runtime error (`Creator(followrs=...)` is invalid).
+
+#### `GET /creator/search`
+Searches/filters creators with pagination.
+
+**Query Parameters** (all optional):
+- `niche` — filter by exact niche match
+- `min_followers` — minimum follower count
+- `max_followers` — maximum follower count
+- `limit` (default 10) — page size
+- `offset` (default 0) — pagination offset
+- `sort_by_followers` (default False) — sort descending by followers
+
+**Response**: Array of creator objects with nested user info:
+```json
+[{
+    "creator_id": 1,
+    "bio": "...",
+    "niche": "tech",
+    "followers": 50000,
+    "user": { "id": 1, "name": "...", "email": "..." }
+}]
+```
+
+**⚠️ Known Bug**: Line 74 uses `.filter()` instead of `.order_by()` for sorting:
+```python
+query = query.filter(Creator.followers.desc())  # BUG: should be .order_by()
+```
+
+#### `GET /creator/{creator_id}`
+Gets a single creator's profile by ID.
+
+**Path Parameter**: `creator_id` (int)
+
+**Response**: Creator object with nested user info (same shape as search results).
+
+### ⚠️ Known Bug (get_db)
+Same `db.close` (missing parentheses) bug as in `auth.py`.
+
+---
+
+## 9. Brand Routes — `backend/routes/brands.py`
+
+Prefix: `/brand` | Tags: `["/Brand"]`
+
+All endpoints require authentication.
+
+### Endpoints
+
+#### `POST /brand/brand`
+Creates a brand profile. (Note: effective URL is `/brand/brand` due to prefix + path)
+
+**Query Parameters**: `company_name`, `industry`, `website`
+
+**Logic**:
+1. Verify `current_user.role == "brand"` → 403 if not
+2. Check if brand profile already exists → 401 (should be 400) if yes
+3. Create `Brand` record
+4. Return `{"message": "Brand Profile Created Sucessfully"}`
+
+#### `GET /brand/{brand_id}`
+Gets a brand profile by ID, including products list.
+
+**Response**:
+```json
+{
+    "brand_id": 1,
+    "company_name": "Acme Corp",
+    "industry": "Tech",
+    "website": "https://acme.com",
+    "contact_email": "brand@acme.com",
+    "products": [
+        { "product_id": 1, "name": "...", "description": "...", "discounted_price": 999 }
+    ]
+}
+```
+
+#### `GET /brand/`
+Lists all brands, optionally filtered by industry.
+
+**Query Parameter**: `industry` (optional)
+
+**Response**: Array of brand summary objects.
+
+### ⚠️ Known Bug (get_db)
+Same `db.close` (missing parentheses) bug. Also, these routes are **never actually registered** in `main.py` due to the import bug there.
+
+---
+
+## 10. Marketplace Routes — `backend/routes/marketplace.py`
+
+Prefix: `/marketplace` | Tags: `["Marketplace"]`
+
+All endpoints require authentication.
+
+### Endpoints
+
+#### `POST /marketplace/product`
+Creates a new product for the authenticated brand user.
+
+**Query Parameters**: `name`, `description`, `discounted_price`
+
+**Logic**:
+1. Verify `current_user.role == "brand"` → 403 if not
+2. Find the brand profile for the current user → 400 if not found
+3. Create `Product` record linked to the brand
+4. Return `{"message": "Product added successfully"}`
+
+#### `GET /marketplace/products`
+Lists all products with brand info.
+
+**Response**:
+```json
+[{
+    "product_id": 1,
+    "name": "...",
+    "description": "...",
+    "discounted_price": 999,
+    "brand": { "id": 1, "company_name": "..." }
+}]
+```
+
+### ⚠️ Known Bugs
+1. **Line 54**: `db.query.all()` should be `db.query(Product).all()` — missing `Product` model in query, will crash.
+2. **Line 62**: `p.brand.name` should be `p.brand.company_name` — `Brand` model has no `name` attribute.
+
+---
+
+## 11. AI Matching System — `backend/routes/ai.py` + `backend/ai/matcher.py`
+
+### Route: `POST /ai/match-creators`
+
+Prefix: `/ai` | Tags: `["AI Matching"]`
+
+Requires authentication.
+
+**Query Parameter**: `prompt` (str) — a natural language description of the type of creator a brand is looking for (e.g. "fitness influencer with large following")
+
+**Logic**:
+1. Fetch all creators from DB
+2. Pass `prompt` and `creators` list to `match_creators()`
+3. Return top 5 matched creators
+
+**Response**:
+```json
+[{
+    "id": 1,
+    "niche": "fitness",
+    "followers": 100000,
+    "bio": "Fitness guru..."
+}]
+```
+
+### Matching Algorithm: `backend/ai/matcher.py`
+
+Uses the `all-MiniLM-L6-v2` sentence-transformer model.
+
+**`match_creators(prompt, creators)`**:
+1. Encode the `prompt` string into a 384-dim embedding
+2. For each creator, build a text string: `"{niche} {bio} {followers}"`
+3. Encode each creator's text into an embedding
+4. Compute cosine similarity between prompt embedding and each creator embedding
+5. Sort by similarity score (descending)
+6. Return the top 5 creators
+
+**`cosine_similarity(a, b)`**: Manual implementation using numpy: `dot(a,b) / (norm(a) * norm(b))`
+
+---
+
+## 12. API Endpoint Summary
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `GET` | `/` | No | Health check, returns hello message |
+| `POST` | `/auth/register` | No | Register new user (creator or brand) |
+| `POST` | `/auth/login` | No | Login, returns JWT access token |
+| `GET` | `/auth/me` | Yes | Get current user info |
+| `POST` | `/creator/profile` | Yes | Create creator profile |
+| `GET` | `/creator/search` | Yes | Search/filter creators |
+| `GET` | `/creator/{creator_id}` | Yes | Get single creator profile |
+| `POST` | `/brand/brand` | Yes | Create brand profile (⚠️ route not registered) |
+| `GET` | `/brand/{brand_id}` | Yes | Get brand profile + products (⚠️ route not registered) |
+| `GET` | `/brand/` | Yes | List all brands (⚠️ route not registered) |
+| `POST` | `/marketplace/product` | Yes | Add a product (brand only) |
+| `GET` | `/marketplace/products` | Yes | List all products |
+| `POST` | `/ai/match-creators` | Yes | AI-powered creator matching |
+
+---
+
+## 13. Authentication Flow
+
+```
+1. User registers via POST /auth/register (name, email, password, role)
+2. Password is hashed with bcrypt and stored
+3. User logs in via POST /auth/login (email, password)
+4. Server verifies password, generates JWT with { sub: user_id, exp: +30min }
+5. Client includes JWT in Authorization header: "Bearer <token>"
+6. Protected endpoints use get_current_user dependency to:
+   a. Decode JWT
+   b. Extract user_id from "sub" claim
+   c. Query User from DB
+   d. Return User object (or 401 if invalid)
+```
+
+---
+
+## 14. Known Bugs & Issues Summary
+
+| # | File | Line(s) | Issue | Severity |
+|---|---|---|---|---|
+| 1 | `main.py` | 7 | Imports `creator.router` as `brand_router` instead of `brands.router` — brand routes never registered | **Critical** |
+| 2 | `routes/auth.py` | 24 | `db.close` missing `()` — DB session never closes | Medium |
+| 3 | `routes/creator.py` | 18 | `db.close` missing `()` — same issue | Medium |
+| 4 | `routes/brands.py` | 18 | `db.close` missing `()` — same issue | Medium |
+| 5 | `routes/creator.py` | 24, 40 | Parameter `followrs` typo — should be `followers` — will crash on profile creation | **Critical** |
+| 6 | `routes/creator.py` | 74 | Uses `.filter()` instead of `.order_by()` for sorting | **High** |
+| 7 | `routes/marketplace.py` | 54 | `db.query.all()` missing `Product` model — will crash | **Critical** |
+| 8 | `routes/marketplace.py` | 62 | `p.brand.name` should be `p.brand.company_name` | **High** |
+| 9 | `routes/auth.py` | 12-14 | JWT config hardcoded, not loaded from `.env` | Low |
+| 10 | `routes/brands.py` | 34 | Wrong HTTP status 401 for "profile already exists" (should be 400/409) | Low |
+
+---
+
+## 15. Empty / Placeholder Files & Directories
+
+These exist in the project but contain no code yet:
+
+- `backend/login.py` — empty file
+- `backend/schemas/` — empty directory (Pydantic request/response schemas not yet implemented)
+- `backend/brand/` — empty directory
+- `backend/core/` — empty directory
+- `backend/creator/` — empty directory
+- `frontend/` — empty directory (no frontend built yet)
+
+---
+
+## 16. How to Run
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the server
+uvicorn backend.main:app --reload
+
+# API docs available at
+# http://127.0.0.1:8000/docs (Swagger UI)
+# http://127.0.0.1:8000/redoc (ReDoc)
+```
+
+---
+
+## 17. Data Flow Diagrams
+
+### Brand Creating a Product
+```
+Brand User → POST /auth/login → JWT Token
+           → POST /marketplace/product (with token)
+           → Verify role == "brand"
+           → Find Brand profile by user_id
+           → Create Product linked to Brand
+           → Response: success message
+```
+
+### AI Creator Matching
+```
+Brand User → POST /ai/match-creators?prompt="fitness influencer"
+           → Verify JWT token
+           → Fetch all Creators from DB
+           → For each creator: encode "{niche} {bio} {followers}"
+           → Encode prompt text
+           → Compute cosine similarity for each pair
+           → Sort by score, return top 5
+```
+
+---
+
+## 18. Architecture Patterns Used
+
+1. **Dependency Injection**: FastAPI's `Depends()` for DB sessions and auth
+2. **Repository Pattern (implicit)**: Direct SQLAlchemy queries in route handlers (no separate repository layer)
+3. **Role-Based Access Control**: Checked via `current_user.role` in each endpoint
+4. **Semantic Search**: Sentence-transformer embeddings for creator-brand matching
+5. **Auto-migration**: `Base.metadata.create_all()` for auto-creating tables on startup (no Alembic migrations)
+
+---
+
+## 19. Things Not Yet Implemented
+
+- **Pydantic Schemas** (request/response validation) — endpoints accept raw query params
+- **Frontend** — directory exists but is empty
+- **Alembic Migrations** — using auto-create instead
+- **CORS middleware** — not configured
+- **Rate limiting** — none
+- **Logging** — none
+- **Error handling middleware** — none
+- **Unit tests** — none
+- **Product update/delete** — only create and list
+- **Creator/Brand profile update/delete** — only create and read
+- **Campaign/Collaboration tracking** — not implemented
+- **Payment integration** — not implemented
