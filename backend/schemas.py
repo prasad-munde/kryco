@@ -27,3 +27,17 @@ class Productres(BaseModel):
     class Config:
         from_attributes=True
     
+class creatorcreate(BaseModel):
+    name : str
+    niche : str
+    platform : str
+    bio : str
+
+class creatorres(BaseModel):
+    id:int
+    name : str
+    niche : str
+    platform : str
+    bio : str
+    class Config:
+        from_attributes = True

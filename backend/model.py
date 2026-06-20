@@ -17,3 +17,10 @@ class Product(Base):
     description = Column(String)
     brand = Column(String)
 
+class Creator(Base):
+    __tablename__ ="creator"
+    id = Column(Integer,primary_key=True,index=True)
+    name = Column(String)
+    niche = Column(String)
+    platform = Column(String)
+    bio = Column(String)
