@@ -1,4 +1,23 @@
 from pydantic import BaseModel,EmailStr
+from enum import Enum
+
+class NicheEnum(str,Enum):
+    gaming = "Gaming"
+    technology = "Technology"
+    fitness = "Fitness"
+    fashion = "Fashion"
+    education = "Education"
+    travel = "Travel"
+    food = "Food"
+
+
+class PlatformEnum(str,Enum):
+    youtube = "YouTube"
+    instagram = "Instagram"
+    tiktok = "TikTok"
+    snapchat = "Snapchat"
+
+
 
 class userRegister(BaseModel):
     name: str
@@ -26,11 +45,13 @@ class Productres(BaseModel):
 
     class Config:
         from_attributes=True
-    
+
+
+
 class creatorcreate(BaseModel):
     name : str
-    niche : str
-    platform : str
+    niche : NicheEnum
+    platform : PlatformEnum 
     bio : str
 
 class creatorres(BaseModel):
@@ -41,3 +62,4 @@ class creatorres(BaseModel):
     bio : str
     class Config:
         from_attributes = True
+

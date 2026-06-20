@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException,Depends
 from database import SessionLocal,get_db
 from model import Creator
 from schemas import creatorcreate
+from utils.embeddings import creator_to_document
 
 from utils.security import get_current_user
 from sqlalchemy.orm import Session
@@ -14,6 +15,8 @@ async def register_creator(creator:creatorcreate,db:Session=Depends(get_db),curr
     db.add(new_creator)
     db.commit()
     db.refresh(new_creator)
+    document = creator_to_document(new_creator)
+
     return {"message":"Creator Profile created succesfully"}
 
 @router.get("/fetch_creator")

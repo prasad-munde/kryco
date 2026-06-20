@@ -1,1 +1,8 @@
-1
+1.main file 
+2.db file 
+3.models done 
+4.schemas done
+5.routers done
+6. yes i will log it from now onwards 
+7. working on ai part
+8.added utility fucntion db to doc
