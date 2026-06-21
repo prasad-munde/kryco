@@ -1,6 +1,5 @@
 
 
-
 def creator_to_document(creator):
 
     document = f"""

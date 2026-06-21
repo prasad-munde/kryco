@@ -24,4 +24,3 @@ async def fetch_product(db:Session=Depends(get_db),current_user:str = Depends(ge
         return product_list
             
 
-
