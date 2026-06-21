@@ -1,3 +1,4 @@
+import os
 from jose import jwt,JWTError
 from datetime import datetime,timedelta
 from fastapi import Depends,HTTPException
@@ -5,9 +6,9 @@ from fastapi.security import HTTPBearer,HTTPAuthorizationCredentials
 
 
 
-SECRET_KEY = "prsadd"
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
+ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
 
 security = HTTPBearer()
 
