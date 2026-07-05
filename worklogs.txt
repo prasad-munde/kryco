@@ -6,3 +6,5 @@
 6. yes i will log it from now onwards 
 7. working on ai part
 8.added utility fucntion db to doc
+9.installed milvis and started a container
+10.added embeddings generateion feature for new creator generation 

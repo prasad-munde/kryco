@@ -1,5 +1,6 @@
 from pymilvus import MilvusClient
 from sentence_transformers import SentenceTransformer
+from langsmith import traceable 
 from utils.embeddings import creator_to_document
 client = MilvusClient(
     uri="http://localhost:19530"
@@ -10,8 +11,6 @@ def insert_creator(creator):
     document = creator_to_document(creator)
     embedding = model.encode(document).tolist()
 
-
-    client.drop_collection("creators")
     if not client.has_collection("creators"):
         client.create_collection(
             collection_name="creators",
@@ -28,7 +27,8 @@ def insert_creator(creator):
         ]
     )
     print(result)
-    
+
+@traceable    
 def search_creators(query: str):
     query_embedding = model.encode(query).tolist()
 
@@ -39,3 +39,5 @@ def search_creators(query: str):
     )
 
     return results
+
+
