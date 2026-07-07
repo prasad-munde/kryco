@@ -1,43 +1,53 @@
-from pymilvus import MilvusClient
-from sentence_transformers import SentenceTransformer
-from langsmith import traceable 
-from utils.embeddings import creator_to_document
-client = MilvusClient(
-    uri="http://localhost:19530"
-)
-model = SentenceTransformer("all-mpnet-base-v2")
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_milvus import Milvus
+from langchain_core.documents import Document
+from langsmith import traceable
 
+from utils.embeddings import creator_to_document
+
+MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
+COLLECTION_NAME = "creators"
+MILVUS_URI = "http://localhost:19530"
+
+embedding_model = HuggingFaceEmbeddings(
+    model_name=MODEL_NAME
+)
+
+vectorstore = Milvus(
+    embedding_function=embedding_model,
+    connection_args={
+        "uri": MILVUS_URI
+    },
+    collection_name=COLLECTION_NAME,
+    auto_id=False,
+)
+
+
+@traceable
 def insert_creator(creator):
     document = creator_to_document(creator)
-    embedding = model.encode(document).tolist()
 
-    if not client.has_collection("creators"):
-        client.create_collection(
-            collection_name="creators",
-            dimension=768
-        )
-
-    result = client.insert(
-        collection_name="creators",
-        data=[
-            {
-                "id": creator.id,
-                "vector": embedding
-            }
-        ]
+    doc = Document(
+        page_content=document,
+        metadata={
+            "id": creator.id,
+            "name": creator.name,
+            "platform": creator.platform,
+            "niche": creator.niche,
+            "bio": creator.bio,
+        },
     )
-    print(result)
 
-@traceable    
+    vectorstore.add_documents(
+        documents=[doc],
+        ids=[str(creator.id)]
+    )
+
+
+@traceable
 def search_creators(query: str):
-    query_embedding = model.encode(query).tolist()
-
-    results = client.search(
-        collection_name="creators",
-        data=[query_embedding],
-        limit=5
+    retriever = vectorstore.as_retriever(
+        search_kwargs={"k": 5}
     )
 
-    return results
-
-
+    return retriever.invoke(query)

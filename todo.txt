@@ -4,3 +4,44 @@ strucutred calling so that llm can invoke serch filter
 a creator search agent
 mcp intigration
 a superviour+specialised agents
+
+
+
+✅ Store complete creator metadata in Milvus
+
+Right now you're only storing:
+
+{
+    "id": creator.id,
+    "vector": embedding
+}
+We should also store fields like name, niche, platform, followers, etc., so search results already contain everything we need.
+✅ Add LangChain
+Replace direct SentenceTransformer usage with LangChain embeddings.
+Wrap Milvus as a LangChain vector store.
+This makes it much easier to build the RAG pipeline.
+✅ Retriever
+
+Instead of calling client.search() directly everywhere, create a retriever:
+
+retriever.invoke(query)
+This will become the single entry point for semantic search.
+✅ Prompt + LLM
+Build the prompt that receives:
+User query
+Retrieved creators
+Instructions
+Then send it to the LLM to rank and explain recommendations.
+✅ LangSmith tracing
+Add @traceable to the important functions once the pipeline is stable:
+embedding generation
+retrieval
+prompt creation
+LLM call
+This will let you inspect the full execution in LangSmith.
+✅ Evaluation
+Test with queries like:
+"Gaming creators with high engagement"
+"Fashion influencers on Instagram"
+"Tech YouTubers in India"
+Check retrieval quality before tuning embeddings or prompts.

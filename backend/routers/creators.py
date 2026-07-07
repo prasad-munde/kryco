@@ -7,7 +7,7 @@ from utils.vector_db import insert_creator
 from utils.security import get_current_user
 from sqlalchemy.orm import Session
 from utils.vector_db import search_creators
-from backend.services.llm import rank_creators
+from services.llm import rank_creators
 from langsmith import traceable
 router = APIRouter()
 
@@ -34,24 +34,33 @@ def search(
 ):
     results = search_creators(query)
 
+    # Temporary: inspect one returned document
+    print(results)
+    if results:
+        print(results[0])
+
     creator_ids = [
-        hit["id"]
-        for hit in results[0]
+        int(doc.metadata["id"])
+        for doc in results
     ]
 
-    creators = db.query(Creator).filter(
-        Creator.id.in_(creator_ids)
-    ).all()
+    creators = (
+        db.query(Creator)
+        .filter(Creator.id.in_(creator_ids))
+        .all()
+    )
+
     creator_data = [
-    {
-        "id": creator.id,
-        "name": creator.name,
-        "platform": creator.platform,
-        "niche": creator.niche,
-        "bio": creator.bio
-    }
-    for creator in creators
+        {
+            "id": creator.id,
+            "name": creator.name,
+            "platform": creator.platform,
+            "niche": creator.niche,
+            "bio": creator.bio,
+        }
+        for creator in creators
     ]
-    print(creator_data)
-    recommendations = rank_creators(query,creator_data)
+
+    recommendations = rank_creators(query, creator_data)
+
     return recommendations

@@ -1,8 +1,17 @@
-from pymilvus import MilvusClient
-from sentence_transformers import SentenceTransformer
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_milvus import Milvus
 
-client = MilvusClient(
-    uri="http://localhost:19530"
+embedding = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/all-mpnet-base-v2"
 )
 
-client.drop_collection("creators")
+vs = Milvus(
+    embedding_function=embedding,
+    collection_name="creators",
+    connection_args={
+        "uri": "http://localhost:19530",
+    },
+    drop_old=True,
+)
+
+print("VectorStore created successfully!")

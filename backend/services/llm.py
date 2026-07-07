@@ -1,30 +1,49 @@
 import os
-from google import genai
+from schemas import CreatorRecommendationList
 from dotenv import load_dotenv
 from langsmith import traceable
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 load_dotenv()
+
 api_key=os.environ.get("GEMINIAPIKEY")
-client = genai.Client(api_key=api_key)
 
-@traceable    
-def rank_creators(query:str,creator:list):
-    prompt = f"""Brand requirement {query}
-                 creators {creator}
-            rank these creators best to worst match according to the query of brand
-            Return:
-            -creator id
-            -rank 
-            -reason
+model = ChatGoogleGenerativeAI(model="gemini-2.5-flash",
+                               api_key=api_key)
+structured_model = model.with_structured_output(CreatorRecommendationList)
 
-        return Json only"""
+prompt = ChatPromptTemplate.from_template("""
+You are an AI influencer marketing assistant.
 
-    response = client.models.generate_content(
-        model="gemma-4-26b-a4b-it",
-        contents = prompt
+Brand Requirement:
+{query}
+
+Retrieved Creators:
+{creators}
+
+Rank the creators from best to worst.
+
+Base the ranking on:
+- niche
+- bio
+- platform
+- relevance to the campaign
+
+Provide a reason for every recommendation.
+""")
+
+chain = prompt | structured_model
+
+@traceable
+def rank_creators(query: str, creators: list):
+    response = chain.invoke(
+        {
+            "query": query,
+            "creators": creators,
+        }
     )
+ 
 
-    return response.text
-
+    return response
 
 

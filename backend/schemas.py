@@ -1,5 +1,6 @@
 from pydantic import BaseModel,EmailStr
 from enum import Enum
+from typing import List
 
 class NicheEnum(str,Enum):
     gaming = "Gaming"
@@ -63,3 +64,10 @@ class creatorres(BaseModel):
     class Config:
         from_attributes = True
 
+class CreatorRecommendation(BaseModel):
+    creator_id : str
+    rank : int
+    reason : str
+
+class CreatorRecommendationList(BaseModel):
+    recommendation : List[CreatorRecommendation]
