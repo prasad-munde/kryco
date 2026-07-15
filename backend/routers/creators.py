@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException,Depends
 from database import SessionLocal,get_db
 from model import Creator
 from schemas import creatorcreate
-from utils.embeddings import creator_to_document
+
 from utils.vector_db import insert_creator
 from utils.security import get_current_user
 from sqlalchemy.orm import Session
@@ -34,7 +34,6 @@ def search(
 ):
     results = search_creators(query)
 
-    # Temporary: inspect one returned document
     print(results)
     if results:
         print(results[0])

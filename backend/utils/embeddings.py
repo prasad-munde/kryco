@@ -10,3 +10,4 @@ def creator_to_document(creator):
     """
 
     return document.strip()
+

@@ -1,27 +1,30 @@
+import os
+from dotenv import load_dotenv
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_milvus import Milvus
 from langchain_core.documents import Document
 from langsmith import traceable
-
 from utils.embeddings import creator_to_document
-
-MODEL_NAME = "sentence-transformers/all-mpnet-base-v2"
-COLLECTION_NAME = "creators"
-MILVUS_URI = "http://localhost:19530"
+load_dotenv()
+MODEL_NAME = os.getenv("MODEL_NAME")
+COLLECTION_NAME = os.getenv("COLLECTION_NAME")
+MILVUS_URI = os.getenv("MILVUS_URI")
 
 embedding_model = HuggingFaceEmbeddings(
     model_name=MODEL_NAME
 )
-
-vectorstore = Milvus(
-    embedding_function=embedding_model,
-    connection_args={
-        "uri": MILVUS_URI
-    },
-    collection_name=COLLECTION_NAME,
-    auto_id=False,
-)
-
+try:
+    vectorstore = Milvus(
+        embedding_function=embedding_model,
+        connection_args={"uri": MILVUS_URI},
+        collection_name=COLLECTION_NAME,
+        auto_id=False,
+    )
+    print("Milvus vectorstore initialized successfully.")
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+    raise
 
 @traceable
 def insert_creator(creator):
