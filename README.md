@@ -191,5 +191,3 @@ Before running, ensure you have set the required environment variables in `.env`
 
 This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
 
----
-*Generated with the help of Claude Code.*
