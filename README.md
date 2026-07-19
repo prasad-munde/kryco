@@ -161,6 +161,32 @@ Interactive docs: `http://localhost:8000/docs`.
 6. Write unit/tests for core services (auth, vector store, LLM ranking).  
 7. Add pagination to list endpoints.  
 
+## Running with Docker Compose
+
+The application can be easily run using Docker Compose, which will start all required services:
+
+```bash
+docker-compose up --build
+```
+
+The application will be available at http://localhost:8000
+
+Make sure to configure your environment variables in the `.env` file before starting the services.
+
+Services started:
+- Backend API (FastAPI) on port 8000
+- PostgreSQL database on port 5432
+- Redis cache on port 6379
+- Etcd for Milvus coordination
+- MinIO for object storage (used by Milvus)
+- Milvus vector database
+
+Before running, ensure you have set the required environment variables in `.env`:
+- `GEMINIAPIKEY` - Google Gemini API key
+- `SECRET_KEY` - Secret key for JWT authentication
+- `LANGSMITH_API_KEY` - LangSmith tracing key (optional but recommended)
+- And other variables as needed
+
 ## License
 
 This project is licensed under the MIT License – see the [LICENSE](LICENSE) file for details.
